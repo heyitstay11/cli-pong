@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const { emitKeypressEvents } = require("readline");
 const { stdin, stdout } = process;
 
