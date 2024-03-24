@@ -1,9 +1,7 @@
 const { emitKeypressEvents } = require("readline");
 const { stdin, stdout } = process;
 
-// ==================== CONSTANTS ====================
-
-const TICK_TIMEOUT = 150;
+const TICK_TIMEOUT = 120;
 
 const BOX = {
   TOP_LEFT_CORNER: "\u250C",
@@ -14,6 +12,8 @@ const BOX = {
   VERTICAL_LINE: "\u2502",
   PADDLE: "\u2588",
   BALL: "\u2B24",
+  RESET_COLOR: "\x1b[0m",
+  SET_YELLOW_COLOR: "\x1b[1;33m",
 };
 
 const { columns, rows } = stdout;
@@ -69,21 +69,22 @@ const endGame = (message) => {
   return process.exit(0);
 };
 
-stdin.on("keypress", (str, key) => {
+stdin.on("keypress", (_, key) => {
   if (key.ctrl && key.name === "c") {
-    return endGame("See you soon again :)");
+    return endGame(`Final Score ${paddle1.score} - ${paddle2.score}.`);
   }
-
   switch (key.name) {
-    case "up":
-      paddle1.move = -1;
+    case "w":
+      paddle1.velX = -1;
       break;
-    case "right":
+    case "up":
+      paddle2.velX = -1;
+      break;
+    case "d":
+      paddle1.velX = 1;
       break;
     case "down":
-      paddle1.move = 1;
-      break;
-    case "left":
+      paddle2.velX = 1;
       break;
   }
 });
@@ -97,16 +98,20 @@ const clearPaddle = (paddle) => {
 };
 
 const movePaddle = (paddle) => {
-  if (paddle.move === 1 && paddle.v !== rows - paddle.height - 1) {
-    paddle.v++;
-  }
-  if (paddle.move === -1 && paddle.v !== 1) {
-    paddle.v--;
+  if (
+    (paddle.v === rows - paddle.height - 1 && paddle.velX === 1) ||
+    (paddle.v === 1 && paddle.velX === -1)
+  ) {
+    paddle.velX = 0;
+  } else {
+    paddle.v += paddle.velX;
   }
 };
 
 const drawPaddle = (paddle) => {
-  clearPaddle(paddle);
+  if (paddle.velX !== 0) {
+    clearPaddle(paddle);
+  }
   movePaddle(paddle);
   cursorTo(paddle.v + 1, paddle.h + 1);
   for (let i = 0; i < paddle.height; i++) {
@@ -115,28 +120,87 @@ const drawPaddle = (paddle) => {
   }
 };
 
+const clearBall = (ball) => {
+  cursorTo(ball.v, ball.h);
+  output(" ");
+};
+
+const resetBall = (ball) => {
+  ball.h = Math.floor(columns / 2);
+  ball.v = Math.floor(rows / 2);
+  ball.velX = Math.random() < 0.5 ? 1 : -1;
+  ball.velY = Math.random() < 0.5 ? 1 : -1;
+};
+
+const moveBall = (ball) => {
+  if (ball.v === 2) {
+    ball.velY *= -1;
+  }
+
+  if (ball.v === rows - 1) {
+    ball.velY *= -1;
+  }
+
+  if (ball.h === 3) {
+    paddle2.score++;
+    resetBall(ball);
+  }
+
+  if (ball.h === columns - 4) {
+    paddle1.score++;
+    resetBall(ball);
+  }
+
+  if (
+    ball.h + ball.velX === paddle1.h + 1 &&
+    ball.v >= paddle1.v &&
+    ball.v <= paddle1.v + paddle1.height
+  ) {
+    ball.velX *= -1;
+  }
+
+  if (
+    ball.h + ball.velX === paddle2.h &&
+    ball.v >= paddle2.v &&
+    ball.v <= paddle2.v + paddle2.height
+  ) {
+    ball.velX *= -1;
+  }
+
+  ball.h += ball.velX;
+  ball.v += ball.velY;
+};
+
 const drawBall = (ball) => {
-  cursorTo(ball.h, ball.v);
+  clearBall(ball);
+  moveBall(ball);
+  output(BOX.SET_YELLOW_COLOR);
+  cursorTo(ball.v, ball.h);
   output(BOX.BALL);
+  output(BOX.RESET_COLOR);
 };
 
 const paddle1 = {
   height: 3,
   v: 10,
   h: 5,
-  move: 0,
+  velX: 0,
+  score: 0,
 };
 
 const paddle2 = {
   height: 3,
   v: 10,
   h: columns - 5,
-  move: 0,
+  velX: 0,
+  score: 0,
 };
 
 const ball = {
-  h: Math.floor(rows / 2),
-  v: Math.floor(columns / 2),
+  v: Math.floor(rows / 2),
+  h: Math.floor(columns / 2),
+  velX: Math.random() < 0.5 ? 1 : -1,
+  velY: Math.random() < 0.5 ? 1 : -1,
 };
 
 emitKeypressEvents(stdin);
@@ -147,6 +211,8 @@ hideCursor();
 drawBoard();
 
 const render = () => {
+  cursorTo(1, 2);
+  console.log(`${paddle1.score}-${paddle2.score}`);
   [paddle1, paddle2].forEach((paddle) => {
     drawPaddle(paddle);
   });
